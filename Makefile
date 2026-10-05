@@ -8,6 +8,7 @@
 #                                            cuda_assignment_kernel.cu in src/)
 #   make clean
 # -----------------------------------------------------------------------
+CUDA_HOME ?= /usr/local/cuda
 CXX      = g++
 MPICXX   = mpicxx
 NVCC     = nvcc

@@ -1,0 +1,13 @@
+# Binaries and object files
+bin/
+*.o
+*.exe
+
+# Datasets and experiment results
+data/*.bin
+results/*
+!results/.gitkeep
+
+# Temporary extraction & build logs
+pdf_text_extracted.txt
+*.log

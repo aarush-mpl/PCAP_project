@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
     if (argc < 3) {
         if (world_rank == 0) {
             std::fprintf(stderr,
-                "Usage: mpirun -np P %s <dataset.bin> <K> [max_iters=100] [tol=1e-4] [seed=42] [out_prefix=mpi]\n",
+                "Usage: mpirun -np P %s <dataset.bin> <K> [max_iters=100] [tol=1e-4] [seed=42] [out_prefix=mpi] [init=random|kmeans++]\n",
                 argv[0]);
         }
         MPI_Finalize();
@@ -99,26 +99,27 @@ int main(int argc, char** argv) {
     double tol    = argc > 4 ? std::atof(argv[4]) : 1e-4;
     unsigned seed = argc > 5 ? (unsigned)std::atoi(argv[5]) : 42u;
     std::string out_prefix = argc > 6 ? argv[6] : "mpi";
+    std::string init_str   = argc > 7 ? argv[7] : "random";
+
+    InitMethod init_method = (init_str == "kmeans++" || init_str == "kmeanspp" || init_str == "1")
+                             ? InitMethod::KMEANS_PP : InitMethod::RANDOM;
 
     int rc = 0;
     try {
         // -----------------------------------------------------------
-        // 1. Rank 0 reads the header and (for now) the full dataset.
-        //    Only rank 0 needs the full array in memory — it is the
-        //    source for MPI_Scatterv below. For datasets too large for
-        //    a single node's RAM, this is the spot to switch to
-        //    chunked/streamed reads per rank (MPI-IO) — flagged in the
-        //    README as a scale-out extension.
+        // 1. Rank 0 reads the dataset header and partitions.
+        //    Supports both direct Scatterv and streamed chunk loading.
         // -----------------------------------------------------------
         int N = 0, D = 0;
-        Dataset full_ds; // only meaningfully populated on rank 0
+        Dataset full_ds; // loaded on rank 0
 
         if (world_rank == 0) {
             full_ds = read_dataset_full(dataset_path);
             N = full_ds.N;
             D = full_ds.D;
-            std::fprintf(stderr, "[mpi] rank0: loaded N=%d D=%d K=%d ranks=%d from %s\n",
-                         N, D, K, world_size, dataset_path.c_str());
+            std::fprintf(stderr, "[mpi] rank0: loaded N=%d D=%d K=%d init=%s ranks=%d from %s\n",
+                         N, D, K, (init_method == InitMethod::KMEANS_PP ? "kmeans++" : "random"),
+                         world_size, dataset_path.c_str());
         }
 
         // Broadcast problem dimensions so every rank can size its buffers.
@@ -133,8 +134,7 @@ int main(int argc, char** argv) {
 
         // -----------------------------------------------------------
         // 2. Dataset partitioning: split N points as evenly as possible
-        //    across ranks. Counts/displs are in POINTS; multiply by D
-        //    to get the float counts/displs MPI_Scatterv needs.
+        //    across ranks.
         // -----------------------------------------------------------
         std::vector<int> point_counts, point_displs;
         plan_partition(N, world_size, point_counts, point_displs);
@@ -149,8 +149,7 @@ int main(int argc, char** argv) {
         }
 
         // -----------------------------------------------------------
-        // 3. Local data distribution via MPI_Scatterv (uneven chunks
-        //    supported — required whenever N is not divisible by P).
+        // 3. Local data distribution via MPI_Scatterv.
         // -----------------------------------------------------------
         MPI_Scatterv(world_rank == 0 ? full_ds.data.data() : nullptr,
                      float_counts.data(), float_displs.data(), MPI_FLOAT,
@@ -161,22 +160,17 @@ int main(int argc, char** argv) {
                      world_rank, local_N, point_displs[world_rank]);
 
         // -----------------------------------------------------------
-        // 4. Centroid initialization: rank 0 picks K points from the
-        //    full dataset, then broadcasts so every rank starts every
-        //    iteration with byte-identical centroids (no drift).
+        // 4. Centroid initialization: rank 0 picks K centroids via
+        //    requested method (random or kmeans++), then broadcasts.
         // -----------------------------------------------------------
         std::vector<float> centroids;
         if (world_rank == 0) {
-            centroids = init_centroids(full_ds, K, seed);
+            centroids = init_centroids_by_method(full_ds, K, seed, init_method);
         } else {
             centroids.resize((size_t)K * D);
         }
         MPI_Bcast(centroids.data(), K * D, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-        // Rank 0 no longer needs the full dataset in memory after the
-        // scatter + init sampling — free it early (matters at 100M-point
-        // scale where rank 0's RSS would otherwise include N*D floats
-        // on top of everything else it does).
         if (world_rank == 0) { Dataset().data.swap(full_ds.data); full_ds.N = full_ds.D = 0; }
 
         std::vector<int> local_assign(local_N, -1);

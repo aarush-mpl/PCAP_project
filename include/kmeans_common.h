@@ -124,6 +124,77 @@ inline std::vector<float> init_centroids(const Dataset& ds, int K, unsigned seed
 }
 
 // -----------------------------------------------------------------------
+// K-Means++ Initialization: selects initial centroids probabilistically
+// proportional to D(x)^2 for faster and tighter convergence.
+// -----------------------------------------------------------------------
+inline std::vector<float> init_centroids_kmeans_pp(const Dataset& ds, int K, unsigned seed) {
+    if (K > ds.N) throw std::runtime_error("K cannot exceed number of points");
+    std::vector<float> centroids((size_t)K * ds.D);
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<int> dist_first(0, ds.N - 1);
+
+    int first_idx = dist_first(rng);
+    std::memcpy(&centroids[0], &ds.data[(size_t)first_idx * ds.D], sizeof(float) * ds.D);
+
+    std::vector<double> min_dist_sq(ds.N, 1e300);
+
+    for (int k = 1; k < K; ++k) {
+        const float* prev_c = &centroids[(size_t)(k - 1) * ds.D];
+        double total_dist_sq = 0.0;
+
+        for (int i = 0; i < ds.N; ++i) {
+            const float* p = &ds.data[(size_t)i * ds.D];
+            double dist_sq = 0.0;
+            for (int d = 0; d < ds.D; ++d) {
+                double diff = (double)p[d] - (double)prev_c[d];
+                dist_sq += diff * diff;
+            }
+            if (dist_sq < min_dist_sq[i]) {
+                min_dist_sq[i] = dist_sq;
+            }
+            total_dist_sq += min_dist_sq[i];
+        }
+
+        if (total_dist_sq <= 0.0) {
+            std::uniform_int_distribution<int> dist_rand(0, ds.N - 1);
+            int rand_idx = dist_rand(rng);
+            std::memcpy(&centroids[(size_t)k * ds.D], &ds.data[(size_t)rand_idx * ds.D], sizeof(float) * ds.D);
+            continue;
+        }
+
+        std::uniform_real_distribution<double> dist_prob(0.0, total_dist_sq);
+        double target = dist_prob(rng);
+        double cumsum = 0.0;
+        int chosen_idx = ds.N - 1;
+
+        for (int i = 0; i < ds.N; ++i) {
+            cumsum += min_dist_sq[i];
+            if (cumsum >= target) {
+                chosen_idx = i;
+                break;
+            }
+        }
+        std::memcpy(&centroids[(size_t)k * ds.D], &ds.data[(size_t)chosen_idx * ds.D], sizeof(float) * ds.D);
+    }
+    return centroids;
+}
+
+enum class InitMethod { RANDOM, KMEANS_PP };
+
+inline std::vector<float> init_centroids_by_method(const Dataset& ds, int K, unsigned seed, InitMethod method) {
+    if (method == InitMethod::KMEANS_PP) {
+        return init_centroids_kmeans_pp(ds, K, seed);
+    }
+    return init_centroids(ds, K, seed);
+}
+
+// Stream chunk helper
+inline size_t read_dataset_chunk(FILE* f, float* buffer, size_t num_floats) {
+    if (!f) return 0;
+    return std::fread(buffer, sizeof(float), num_floats, f);
+}
+
+// -----------------------------------------------------------------------
 // CPU reference assignment step (squared Euclidean distance).
 // This is the function signature both:
 //   (a) the serial baseline, and

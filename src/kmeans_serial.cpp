@@ -28,16 +28,21 @@ int main(int argc, char** argv) {
     double tol       = argc > 4 ? std::atof(argv[4]) : 1e-4;
     unsigned seed    = argc > 5 ? (unsigned)std::atoi(argv[5]) : 42u;
     std::string out_prefix = argc > 6 ? argv[6] : "serial";
+    std::string init_str   = argc > 7 ? argv[7] : "random";
+
+    InitMethod init_method = (init_str == "kmeans++" || init_str == "kmeanspp" || init_str == "1") 
+                             ? InitMethod::KMEANS_PP : InitMethod::RANDOM;
 
     try {
         auto t_load_start = Clock::now();
         Dataset ds = read_dataset_full(dataset_path);
         auto t_load_end = Clock::now();
 
-        std::fprintf(stderr, "[serial] Loaded N=%d D=%d K=%d from %s\n",
-                     ds.N, ds.D, K, dataset_path.c_str());
+        std::fprintf(stderr, "[serial] Loaded N=%d D=%d K=%d init=%s from %s\n",
+                     ds.N, ds.D, K, (init_method == InitMethod::KMEANS_PP ? "kmeans++" : "random"),
+                     dataset_path.c_str());
 
-        std::vector<float> centroids = init_centroids(ds, K, seed);
+        std::vector<float> centroids = init_centroids_by_method(ds, K, seed, init_method);
         std::vector<int> assign(ds.N, -1);
 
         std::vector<double> sums((size_t)K * ds.D);

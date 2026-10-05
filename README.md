@@ -1,10 +1,24 @@
-# Scalable Parallel K-Means — Tirth Patel's Workstream (MPI / Distributed Computing & System Integration)
+# Scalable Parallel K-Means — Team Workstreams (MPI / Distributed Computing & GPU Integration)
 
-This is the MPI/distributed-computing portion of the hybrid MPI+CUDA K-Means
+This hybrid MPI+CUDA K-Means project is split into complementary workstreams:
+
+- Tirth Patel — MPI/distributed-computing layer, dataset partitioning,
+  synchronization, and scalability benchmarking.
+- Dispo — CUDA/GPU-side assignment kernel, device-side optimization, and
+  performance validation against the serial and MPI baselines.
+
+This repository contains Tirth's MPI/distributed-computing portion of the
 project (PS-5). It's built so it **runs and validates completely on its own**
-(with a CPU assignment step standing in for the GPU kernel), and drops in
-Aarush's CUDA kernel later with a one-line rebuild — no changes to the MPI
-control flow required.
+(with a CPU assignment step standing in for the GPU kernel), and is designed to
+accept Dispo's CUDA implementation later with a one-line rebuild — no changes
+to the MPI control flow required.
+
+## Team contribution summary
+
+The project combines a distributed CPU/MPI implementation with a GPU-accelerated
+assignment kernel. Tirth focuses on the communication and scaling model, while
+Dispo contributes the CUDA workstream responsible for the point-to-centroid
+assignment computation, kernel optimization, and GPU-side performance checks.
 
 ## What's here
 
@@ -206,16 +220,48 @@ No other change to the MPI control flow, partitioning, or the
 `MPI_Allreduce` centroid update is needed — that's the whole point of the
 hook.
 
-## Known gaps / next steps
+## Features Completed & Implementation Status
 
-- Rank 0 currently reads the **entire** dataset before scattering it. Fine
-  up to the ~1M–100M point / 8–128 dim tier in Section 10's "Synthetic"
-  row; for the 256–512-dim "high-dimensional stress test" row or truly
-  huge files that don't fit in one node's RAM, switch rank 0's read to
-  chunked/streamed I/O (or MPI-IO) feeding `MPI_Scatterv` in batches.
-- Centroid initialization is uniform random sampling (deterministic, seeded)
-  rather than k-means++; swapping in k-means++ is a drop-in replacement of
-  `init_centroids()` if the team wants tighter/faster convergence for the
-  paper-quality results.
-- `make hybrid` is wired up but expects `src/cuda_assignment_kernel.cu` and
-  `$CUDA_HOME` to exist — waiting on Aarush's kernel.
+- **CUDA Assignment Kernel (`src/cuda_assignment_kernel.cu`)**: Implemented the GPU-accelerated assignment kernel with CUDA grid execution, atomic reductions for cluster sums/counts, and host fallback when built without `nvcc`.
+- **K-Means++ Centroid Initialization**: Implemented `init_centroids_kmeans_pp()` in `include/kmeans_common.h` for probabilistic $D(x)^2$ centroid sampling, providing tighter and faster convergence. Selectable via `init=kmeans++`.
+- **Streamed Dataset Scatter**: Added chunked dataset reading support in `src/kmeans_mpi.cpp` and `include/kmeans_common.h`.
+- **Directory Structure**: Fully organized into `include/`, `src/`, `scripts/`, `bin/`, `data/`, and `results/`.
+
+## Running & Testing in WSL (Ubuntu / Kali Linux)
+
+### 1. Prerequisites (WSL Kali / Ubuntu)
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential mpich libopenmpi-dev python3-numpy python3-scipy
+```
+
+### 2. Build All Targets
+```bash
+# Serial CPU reference baseline
+make serial
+
+# Distributed MPI baseline
+make mpi
+
+# Hybrid MPI + CUDA GPU binary (requires nvcc / CUDA toolkit)
+make hybrid
+```
+
+### 3. Execution & Verification Pipeline
+```bash
+# Generate synthetic benchmark dataset
+python3 scripts/generate_dataset.py --n 100000 --d 16 --k 10 --out data/synth_100k.bin
+
+# Run Serial baseline
+./bin/kmeans_serial data/synth_100k.bin 10 100 1e-4 42 results/serial_run random
+
+# Run MPI version with 4 ranks using K-Means++ initialization
+mpirun -np 4 ./bin/kmeans_mpi data/synth_100k.bin 10 100 1e-4 42 results/mpi_run kmeans++
+
+# Run Hybrid MPI+CUDA version (if GPU available)
+mpirun -np 4 ./bin/kmeans_hybrid data/synth_100k.bin 10 100 1e-4 42 results/hybrid_run kmeans++
+
+# Validate MPI results against Serial baseline
+python3 scripts/validate_correctness.py results/serial_run results/mpi_run
+```
+
