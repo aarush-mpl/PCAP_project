@@ -252,16 +252,17 @@ make hybrid
 # Generate synthetic benchmark dataset
 python3 scripts/generate_dataset.py --n 100000 --d 16 --k 10 --out data/synth_100k.bin
 
-# Run Serial baseline
-./bin/kmeans_serial data/synth_100k.bin 10 100 1e-4 42 results/serial_run random
+# Run Serial baseline (using K-Means++)
+./bin/kmeans_serial data/synth_100k.bin 10 100 1e-4 42 results/serial_run kmeans++
 
-# Run MPI version with 4 ranks using K-Means++ initialization
+# Run MPI version with 4 ranks (using K-Means++)
 mpirun -np 4 ./bin/kmeans_mpi data/synth_100k.bin 10 100 1e-4 42 results/mpi_run kmeans++
 
-# Run Hybrid MPI+CUDA version (if GPU available)
+# Run Hybrid MPI+CUDA version (using K-Means++)
 mpirun -np 4 ./bin/kmeans_hybrid data/synth_100k.bin 10 100 1e-4 42 results/hybrid_run kmeans++
 
-# Validate MPI results against Serial baseline
+# Validate MPI & Hybrid output against Serial baseline
 python3 scripts/validate_correctness.py results/serial_run results/mpi_run
+python3 scripts/validate_correctness.py results/serial_run results/hybrid_run
 ```
 
