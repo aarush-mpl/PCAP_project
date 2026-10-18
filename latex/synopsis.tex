@@ -1,0 +1,422 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\setstretch{1.15}
+\setlist[itemize]{topsep=0.35em,itemsep=0.2em,leftmargin=1.4em}
+\setlist[enumerate]{topsep=0.35em,itemsep=0.25em,leftmargin=1.6em}
+
+\titleformat{\section}{\large\bfseries\raggedright}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries\raggedright}{\thesubsection.}{0.55em}{}
+\titlespacing*{\section}{0pt}{1.15em}{0.45em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.3em}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{black!40},
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=0.7em,
+  belowskip=0.7em,
+  showstringspaces=false
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small PS-5 Mini-Project Synopsis}
+\fancyhead[R]{\small Scalable Parallel K-Means}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14.5pt}
+
+\hypersetup{
+  pdftitle={Scalable Parallel K-Means Clustering for Big Data Using MPI and CUDA},
+  pdfauthor={Tirth Miteshkumar Patel, Aarush Arora, and Udit Asthana},
+  pdfsubject={Parallel Computer Architecture and Programming (PS-5), Mini-Project Synopsis}
+}
+
+\makeatletter
+\newcommand{\forcelabel}[1]{\def\@currentlabel{#1}}
+\makeatother
+\DeclareRobustCommand{\code}[1]{\texttt{#1}}
+\DeclareRobustCommand{\file}[1]{\texttt{#1}}
+
+\begin{document}
+
+% ------------------------------------------------------------------
+\begin{center}
+{\large Parallel Computer Architecture \& Programming}\\[0.25em]
+{\large Problem Statement 5}\\[1.15em]
+{\LARGE\bfseries Scalable Parallel K-Means Clustering\\[0.2em]
+for Big Data Using MPI and CUDA}\\[1.05em]
+{\Large Mini-Project Synopsis}\\[0.9em]
+{\normalsize \code{colab} branch implementation}
+\end{center}
+
+\vspace{0.7em}
+\noindent
+At large point counts, the bottleneck in K-means clustering is the repeated nearest-centroid scan. This project distributes that work across MPI ranks and offloads the per-rank assignment step to a CUDA kernel. Three binaries — serial, MPI-only, and hybrid MPI+CUDA — share one mathematical core and one data format, so correctness comparisons are well-defined.
+
+\vspace{0.85em}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\textbf{Field} & \textbf{Detail} \\
+\midrule
+Course & Parallel Computer Architecture \& Programming (PS-5) \\
+Problem statement & Scalable parallel clustering for large point sets \\
+Project title & Scalable Parallel K-Means Clustering for Big Data Using MPI and CUDA \\
+Repository branch & \code{colab} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\vspace{1.05em}
+\noindent\textbf{Team}
+
+\vspace{0.45em}
+\noindent\textbf{1. Tirth Miteshkumar Patel} \quad Reg.\ 240905272 \quad Roll 27 \quad CSE D\\
+Distributed-memory MPI design, dataset partitioning, synchronization, scaling analysis, and the shared numerical core.
+
+\vspace{0.45em}
+\noindent\textbf{2. Aarush Arora} \quad Reg.\ 240905266 \quad Roll 26 \quad CSE D\\
+CUDA assignment kernel, device-side reduction, CPU fallback when no GPU is present.
+
+\vspace{0.45em}
+\noindent\textbf{3. Udit Asthana} \quad Reg.\ 240905310 \quad Roll 31 \quad CSE D\\
+Integration of the MPI driver and the CUDA kernel into \code{kmeans\_hybrid}: the shared assignment contract, the \code{USE\_CUDA\_KERNEL} build, and the runners that validate the bound binary against the serial reference.
+
+\tableofcontents
+
+% ------------------------------------------------------------------
+\section{Abstract}
+\label{sec:abstract}
+
+K-means clusters $N$ points in $D$ dimensions into $K$ groups by alternating nearest-centroid assignment with centroid update. One full assignment pass costs $O(NKD)$, which is the step that makes a single-threaded implementation slow at scale. This project parallelizes that step at two levels.
+
+At the distributed level, points are split across MPI ranks. Each rank assigns its own block and contributes partial cluster sums to a global \code{MPI\_Allreduce}; the communication volume per iteration is $\Theta(KD)$, independent of $N$. At the intra-node level, the CUDA kernel gives one thread to each local point. A CPU fallback activates when no usable device is found.
+
+Three binaries share \file{include/kmeans\_common.h}, which defines the data layout, the distance, the seeding, and the centroid update. A Python checker compares runs by relative SSE and by minimum-cost centroid matching. A scaling harness records strong- and weak-scaling rows to a CSV.
+
+% ------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Lloyd's batch form of K-means \cite{lloyd1982,macqueen1967} runs two operations per iteration. First, every point is assigned to the centroid minimizing squared Euclidean distance. Second, each centroid is replaced by the mean of the points assigned to it. The assignment step reads every coordinate of every point against every centroid, giving a cost of $O(NKD)$ per iteration. The update step reduces $K \times D$ sums, which is small.
+
+The assignment of one point does not depend on any other point's assignment in the same iteration. Points are therefore split across processes, and each process handles its own block. The global centroid update requires only a sum of partial sums and a sum of partial counts — a single all-reduce per iteration. The communication volume stays at $\Theta(KD)$ regardless of $N$, which is the basis for expected near-linear speedup on large datasets, as established by Dhillon and Modha \cite{dhillon2000}.
+
+Within one rank, the distance loop over local points is wide and uniform — the right shape for GPU parallelism. The CUDA kernel assigns one thread per local point \cite{farivar2008}. Current work uses atomic updates for the partial sums \cite{li2013}. The key design constraint is that the GPU kernel must honor the same inputs and outputs as the CPU assignment function, so the MPI iteration does not acquire a second control path.
+
+% ------------------------------------------------------------------
+\section{Problem Statement}
+\label{sec:problem}
+
+Problem Statement 5 asks for a scalable parallel clustering program. The required deliverables have three parts: a serial reference, a distributed-memory MPI implementation, and a GPU implementation of the assignment step embedded in the same distributed iteration.
+
+The engineering constraints that follow are concrete.
+
+\begin{itemize}
+  \item All three binaries must read the same bytes from disk and apply the same update rule, so that a mismatch in the objective is not ambiguous.
+  \item Only one rank reads the full matrix. After the scatter, each rank holds only its own contiguous block.
+  \item Communication time and computation time are recorded separately per iteration, with per-rank extremes retained.
+  \item The GPU entry point satisfies the same function signature as the CPU assignment function. A missing device falls back to the CPU path without changing the MPI control flow.
+\end{itemize}
+
+The stopping rule used throughout is maximum centroid shift: the iteration loop ends when
+\[
+  \Delta = \max_{k:\, n_k > 0}\big\|\mu_k^{\mathrm{new}} - \mu_k^{\mathrm{old}}\big\|_2 < \tau,
+\]
+where $\tau = 10^{-4}$ by default and the iteration cap is 100.
+
+% ------------------------------------------------------------------
+\section{Algorithms}
+\label{sec:algorithms}
+
+\subsection{Lloyd Iteration}
+
+Let $x_i \in \mathbb{R}^{D}$ for $i = 1,\ldots,N$, with current centroids $\mu_1,\ldots,\mu_K$. The assignment of point $i$ is
+\begin{equation}
+  c(i) = \operatorname*{arg\,min}_{k \in \{1,\ldots,K\}}
+           \big\| x_i - \mu_k \big\|_2^2 .
+  \label{eq:assign}
+\end{equation}
+The objective is the within-cluster sum of squared errors,
+\begin{equation}
+  \mathrm{SSE} = \sum_{i=1}^{N} \big\| x_i - \mu_{c(i)} \big\|_2^2 .
+  \label{eq:sse}
+\end{equation}
+After assignment, each non-empty centroid is updated as
+\begin{equation}
+  \mu_k \leftarrow \frac{1}{|C_k|} \sum_{x \in C_k} x .
+  \label{eq:update}
+\end{equation}
+In parallel, the numerator and denominator of \eqref{eq:update} are assembled from per-rank partial sums $S_k^{(r)}$ and counts $n_k^{(r)}$:
+\begin{equation}
+  S_k = \sum_{r=0}^{P-1} S_k^{(r)}, \quad
+  n_k = \sum_{r=0}^{P-1} n_k^{(r)}, \quad
+  \mu_k = S_k / n_k .
+  \label{eq:reduce}
+\end{equation}
+Accumulators are double precision; stored points and centroids are single precision. Squared distance is used throughout, which avoids a square root and preserves the arg-minimum.
+
+\subsection{Initialization}
+
+Two seeded methods are available. Uniform sampling shuffles the point-index vector with \code{std::mt19937} at the given seed and copies the first $K$ rows into the centroid table.
+
+$k$-means++ \cite{arthur2007} draws the first center uniformly from $\{0,\ldots,N-1\}$. Each subsequent center is drawn with probability proportional to the squared distance from the nearest already-chosen center,
+\begin{equation}
+  \Pr(x) = \frac{D(x)^2}{\sum_{x'} D(x')^2} .
+  \label{eq:kpp}
+\end{equation}
+Both methods run on rank 0. The resulting centroid table is broadcast before the first assignment.
+
+% ------------------------------------------------------------------
+\section{System Design}
+\label{sec:design}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Binary} & \textbf{Build target} & \textbf{Assignment} \\
+\midrule
+\code{bin/kmeans\_serial}  & \code{make serial} & \code{assign\_points\_cpu} on all $N$ points \\
+\code{bin/kmeans\_mpi}     & \code{make mpi}    & \code{assign\_points\_cpu} on the local block \\
+\code{bin/kmeans\_hybrid}  & \code{make hybrid} & \code{launch\_assignment\_kernel} on the local block \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{MPI Layer}
+
+\file{src/kmeans\_mpi.cpp} manages the distributed iteration. Rank 0 reads the matrix, broadcasts $N$ and $D$, and draws the initial centroids. Points are partitioned with
+\begin{equation}
+  n_r = \big\lfloor N/P \big\rfloor + \mathbf{1}[r < N \bmod P],
+  \label{eq:partition}
+\end{equation}
+then scattered with \code{MPI\_Scatterv}. After initialization, rank 0 releases the full matrix. Each iteration zeros local sum and count buffers, calls \code{do\_assignment\_step}, and all-reduces three arrays: $K \times D$ double-precision coordinate sums, $K$ integer counts, and one double-precision partial SSE. Every rank then calls \code{update\_centroids} on the reduced globals. Labels are gathered at rank 0 with \code{MPI\_Gatherv} after the loop.
+
+\code{MPI\_Allreduce} is necessary at each iteration because every rank needs the updated centroids before the next assignment. A reduce-then-broadcast would add a second collective; dividing the summed sums by the summed counts locally on each rank avoids that.
+
+\subsection{CUDA Kernel}
+
+\file{src/cuda\_assignment\_kernel.cu} implements \eqref{eq:assign} on the device. The kernel uses a one-dimensional grid of 256-thread blocks; each thread handles one local point. The thread scans the $K$ centroids, selects the minimizing index, and updates cluster sums and counts with \code{atomicAdd}. On pre-6.0 architectures, double-precision atomic addition is replaced with a compare-and-swap loop on the 64-bit representation.
+
+The host launcher \code{launch\_assignment\_kernel} allocates device buffers, copies points and centroids, launches the kernel, synchronizes, copies results back, and frees device memory — all on every Lloyd iteration. Two failure paths exist: absent device count and failed allocation. Both redirect to \code{assign\_points\_cpu}. The fallback fires once and prints a warning; subsequent iterations use the same CPU path.
+
+\subsection{Integration Contract}
+
+\code{do\_assignment\_step} in the MPI driver is the only compile-time branch on \code{USE\_CUDA\_KERNEL}. Both functions receive the local points, the local length, $D$, the centroid table, $K$, a label buffer, a double-precision sum buffer, and an integer count buffer; both return the local SSE.
+
+The hybrid Makefile rule compiles \file{src/cuda\_assignment\_kernel.cu} with \code{nvcc} and links it into the MPI driver with \code{-DUSE\_CUDA\_KERNEL} and \code{libcudart}. \code{make all} builds only the serial and MPI binaries. A machine without \code{nvcc} still produces the full CPU path.
+
+\subsection{Shared Header}
+
+\file{include/kmeans\_common.h} is the single source of the binary format, the partition rule, both initializers, the CPU assignment, the centroid update, and the output writers. All functions are \code{inline}. The on-disk format places a 12-byte header (magic \texttt{0x4B4D4E53}, $N$, $D$ as native 32-bit integers) before $N \times D$ row-major \texttt{float32} values. Contiguity is required by both \code{MPI\_Scatterv} and \code{cudaMemcpy}.
+
+% ------------------------------------------------------------------
+\section{Timing and Communication}
+\label{sec:timing}
+
+Two timestamps bracket \code{do\_assignment\_step} inside each iteration; the outer interval is the computation time. A third timestamp follows the three all-reduces; the intervening interval is the communication time. After the loop, each per-rank total is reduced with \code{MPI\_MIN}, \code{MPI\_MAX}, and \code{MPI\_SUM}. The metrics file stores the average as the sum divided by the rank count, and the minimum and maximum alongside.
+
+The communication-overhead fraction reported per run is
+\begin{equation}
+  f_{\mathrm{comm}} = \frac{\overline{T}_{\mathrm{comm}}}{T_{\mathrm{total}}} ,
+  \label{eq:overhead}
+\end{equation}
+where $\overline{T}_{\mathrm{comm}}$ is the average per-rank communication time and $T_{\mathrm{total}}$ is the barrier-to-barrier wall time of the iteration loop.
+
+On the hybrid path, the computation interval includes device allocation, host-to-device copy, kernel execution, synchronization, and device-to-host copy. It is not a pure arithmetic time. A hybrid-versus-MPI comparison should state that the compute field contains data movement until a profiling pass separates those components.
+
+% ------------------------------------------------------------------
+\section{Datasets and Benchmark Plan}
+\label{sec:data}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.5in}
+                              >{\raggedright\arraybackslash}p{2.2in}
+                              >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Dataset} & \textbf{Shape} & \textbf{Role} \\
+\midrule
+Synthetic         & $N \times D$, configurable     & Scaling, correctness, Colab demo \\
+MNIST \cite{lecun-mnist} & $70{,}000 \times 784$  & High-dimensional public matrix; $K=10$ matches digit count \\
+KDD Cup 1999 (10\%) \cite{kddcup1999} & $494{,}021 \times {\sim}118$ after one-hot encoding & Mixed numeric/categorical traffic matrix \\
+US Census 1990 \cite{census1990} & $2{,}458{,}285 \times {\sim}68$ & Large-$N$ throughput workload \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Every file that reaches a solver has been produced by either \file{scripts/generate\_dataset.py} or \file{scripts/prepare\_real\_data.py}; the solver never parses CSV. Columns are shifted to zero mean and scaled to unit variance by default, because squared Euclidean distance is sensitive to coordinate scale. The Colab notebook and default runners use a synthetic $10^5 \times 16$ matrix with 10 generating clusters, which is large enough to exercise every code path and small enough for an interactive session.
+
+% ------------------------------------------------------------------
+\section{Performance Evaluation}
+\label{sec:perf}
+
+\subsection{Strong Scaling}
+
+Strong scaling fixes the dataset and varies the rank count over $\{1, 2, 4, 8, 16\}$. Speedup and efficiency at rank count $P$ are
+\begin{equation}
+  S(P) = \frac{T(1)}{T(P)}, \quad E(P) = \frac{S(P)}{P},
+  \label{eq:speedup}
+\end{equation}
+where $T(P)$ is \code{total\_time\_s}. When iteration counts differ across rows, $T(P)/\mathrm{iterations}$ is the comparable figure; the SSE column confirms that rows sharing a seed followed the same centroid trajectory.
+
+$S(P)$ is expected to rise while $(N/P)KD$ dominates the $\Theta(KD)$ all-reduce. It flattens as per-rank local work shrinks relative to communication and, on the hybrid path, GPU launch and transfer overhead. The scaling harness is built to show that flattening, including at rank counts that oversubscribe a small VM.
+
+\subsection{Weak Scaling}
+
+Weak scaling holds the work per rank approximately constant. Datasets \code{<prefix>\_r$P$.bin} are generated with $N$ proportional to $P$ and the same $D$. Ideal behavior keeps $T(P)$ near $T(1)$. A rise in \code{total\_time\_s} reflects the growth of the all-reduce with $P$, or GPU contention when the hybrid binary is under test.
+
+% ------------------------------------------------------------------
+\section{Correctness and Validation}
+\label{sec:correct}
+
+K-means finds a local minimum of \eqref{eq:sse}. Two runs from the same initialization at the same seed must agree within rounding, but cluster labels are an arbitrary numbering and atomic GPU reductions are not bit-identical to a serial loop.
+
+Given a reference prefix and a candidate prefix, \file{scripts/validate\_correctness.py} applies four tests.
+
+\begin{enumerate}
+  \item The metrics files must agree on $N$, $D$, and $K$.
+  \item The relative SSE gap must fall within $\varepsilon = 10^{-3}$:
+    \begin{equation}
+      \frac{|\mathrm{SSE}_a - \mathrm{SSE}_b|}{\max(|\mathrm{SSE}_a|,\,10^{-12})} \le \varepsilon .
+      \label{eq:sse-tol}
+    \end{equation}
+  \item Centroids are paired by a minimum-cost assignment on the matrix of pairwise Euclidean distances. SciPy solves this with the Jonker--Volgenant algorithm \cite{kuhn1955}. Each paired distance must be at most $\delta = 10^{-2}$.
+  \item When both assignment files exist, every label must lie in $\{0,\ldots,K{-}1\}$ and each file must contain exactly $N$ labels.
+\end{enumerate}
+
+Each binary also checks internally that the sum of cluster counts equals $N$ before writing output. A mismatch is printed on stderr.
+
+% ------------------------------------------------------------------
+\section{Expected Outcomes}
+\label{sec:outcomes}
+
+The deliverables present on the \code{colab} branch are as follows.
+
+\begin{itemize}
+  \item A serial reference that writes SSE, a centroid table, and a full label vector.
+  \item An MPI implementation producing the same output from multiple ranks, with per-iteration computation and communication times and cross-rank extremes.
+  \item A hybrid implementation that calls the CUDA kernel when a device is available and the CPU loop otherwise, without any change to the MPI iteration.
+  \item A binary dataset format with two writers: one synthetic, one for MNIST, KDD Cup 1999, and US Census 1990.
+  \item A checker with explicit tolerances and a scaling harness that appends strong- and weak-scaling rows to a CSV.
+\end{itemize}
+
+The quantitative results from a particular machine are a CSV and a set of metrics files, interpreted with \eqref{eq:speedup} and \eqref{eq:overhead}. An expected qualitative pattern is a communication fraction that falls as $N$ grows at fixed $K$ and $D$, and a strong-scaling curve that rises while local assignment dominates the all-reduce time.
+
+\subsection{Known Limits}
+
+\begin{itemize}
+  \item Rank 0 holds the full matrix through initialization. Both the matrix read and the $k$-means++ scan are serial and require $O(ND)$ memory on that rank.
+  \item The hybrid launcher allocates and frees device buffers on every iteration. All ranks use the default CUDA device, so multiple ranks on one GPU serialize through the driver rather than running in parallel.
+  \item The kernel uses global-memory atomics without shared-memory or register blocking, which matters most at high $D$ \cite{li2013}.
+  \item Empty clusters are not reseeded.
+\end{itemize}
+
+% ------------------------------------------------------------------
+\section{Work Allocation}
+\label{sec:work}
+
+The team has three workstreams with a clear boundary at \code{do\_assignment\_step}.
+
+\textbf{Tirth Miteshkumar Patel} owns the distributed-memory solver and the shared core: \file{include/kmeans\_common.h}, \file{src/kmeans\_serial.cpp}, and \file{src/kmeans\_mpi.cpp}. This covers rank management, \code{plan\_partition}, the scatter, centroid broadcast, the all-reduce of sums, counts, and SSE, local centroid reconstruction, the gather of labels, and the scaling and checker scripts.
+
+\textbf{Aarush Arora} owns the GPU assignment workstream: \file{src/cuda\_assignment\_kernel.cu}, the device kernel, double-precision atomics including the pre-6.0 compare-and-swap path, the host launcher, and the runtime CPU fallback. A kernel change is accepted when the checker passes on matched centroids and SSE within the tolerances of Section~\ref{sec:correct}.
+
+\textbf{Udit Asthana} integrates the two kernels into one hybrid executable. The work has three parts: matching the \code{extern "C"} signature of \code{launch\_assignment\_kernel} to \code{do\_assignment\_step}; writing the \code{hybrid} Makefile rule; and providing \file{run\_project.sh}, \file{run\_colab.sh}, and the Colab notebook, which build all three binaries, run them on the same matrix with the same seed and initialization, and accept the hybrid run when the checker passes.
+
+% ------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+The project implements K-means as a data-parallel Lloyd iteration. One header defines the data format, the distance, the seeding, and the centroid update. The serial driver runs that iteration on one core and records the reference SSE and centroids. The MPI driver partitions the points, assigns locally, all-reduces the partial sums and counts, and rebuilds centroids on every rank. The CUDA kernel replaces the local assignment with one thread per point and atomic cluster statistics, falling back to the shared CPU loop when the device is unavailable. Separate timers isolate computation from communication, and a checker compares runs by relative SSE and minimum-cost centroid matching.
+
+Tirth Miteshkumar Patel provides the MPI distribution and the global update. Aarush Arora provides the CUDA distance work. Udit Asthana binds the two so the hybrid binary runs as one solver.
+
+% ------------------------------------------------------------------
+\begin{thebibliography}{99}
+
+\bibitem{lloyd1982}
+S.~P. Lloyd.
+\newblock Least squares quantization in PCM.
+\newblock \emph{IEEE Transactions on Information Theory}, 28(2):129--137, 1982.
+
+\bibitem{macqueen1967}
+J.~MacQueen.
+\newblock Some methods for classification and analysis of multivariate observations.
+\newblock In \emph{Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability}, volume~1, pages 281--297, 1967.
+
+\bibitem{arthur2007}
+D.~Arthur and S.~Vassilvitskii.
+\newblock $k$-means++: The advantages of careful seeding.
+\newblock In \emph{Proceedings of the Eighteenth Annual ACM-SIAM Symposium on Discrete Algorithms (SODA)}, pages 1027--1035, 2007.
+
+\bibitem{dhillon2000}
+I.~S. Dhillon and D.~S. Modha.
+\newblock A data-clustering algorithm on distributed memory multiprocessors.
+\newblock In \emph{Large-Scale Parallel Data Mining}, Lecture Notes in Computer Science, volume 1759, pages 245--260. Springer, 2000.
+
+\bibitem{farivar2008}
+R.~Farivar, D.~Rebolledo, E.~Chan, and R.~Campbell.
+\newblock A parallel implementation of $K$-means clustering on GPUs.
+\newblock In \emph{Proceedings of the International Conference on Parallel and Distributed Processing Techniques and Applications (PDPTA)}, pages 340--345, 2008.
+
+\bibitem{li2013}
+Y.~Li, K.~Zhao, X.~Chu, and J.~Liu.
+\newblock Speeding up $k$-means algorithm by GPUs.
+\newblock \emph{Journal of Computer and System Sciences}, 79(2):216--229, 2013.
+
+\bibitem{mpi40}
+Message Passing Interface Forum.
+\newblock \emph{MPI: A Message-Passing Interface Standard, Version 4.1}, 2023.
+
+\bibitem{lecun-mnist}
+Y.~LeCun, C.~Cortes, and C.~J.~C. Burges.
+\newblock The MNIST database of handwritten digits.
+\newblock \url{http://yann.lecun.com/exdb/mnist/}.
+
+\bibitem{kddcup1999}
+S.~Stolfo, W.~Fan, W.~Lee, A.~Prodromidis, and P.~Chan.
+\newblock KDD Cup 1999 Data.
+\newblock UCI Machine Learning Repository, 1999.
+
+\bibitem{census1990}
+C.~Meek, B.~Thiesson, and D.~Heckerman.
+\newblock US Census Data (1990).
+\newblock UCI Machine Learning Repository, 2001.
+
+\bibitem{pedregosa2011}
+F.~Pedregosa et~al.
+\newblock Scikit-learn: Machine learning in Python.
+\newblock \emph{Journal of Machine Learning Research}, 12:2825--2830, 2011.
+
+\bibitem{kuhn1955}
+H.~W. Kuhn.
+\newblock The Hungarian method for the assignment problem.
+\newblock \emph{Naval Research Logistics Quarterly}, 2(1--2):83--97, 1955.
+
+\end{thebibliography}
+
+\end{document}
