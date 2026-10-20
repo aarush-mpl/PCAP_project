@@ -35,9 +35,12 @@ run_one() {
     local dataset=$2
     local out_prefix="$RESULTS/${MODE}_r${ranks}"
 
-    echo ">>> [$MODE] ranks=$ranks dataset=$dataset"
-    mpirun -np "$ranks" "$BIN" "$dataset" "$K" "$MAX_ITERS" "$TOL" "$SEED" "$out_prefix" \
-        > "${out_prefix}.log" 2>&1
+    MPI_FLAGS="--oversubscribe"
+    if [[ "$(id -u)" -eq 0 ]]; then
+        MPI_FLAGS="$MPI_FLAGS --allow-run-as-root"
+    fi
+    mpirun $MPI_FLAGS -np "$ranks" "$BIN" "$dataset" "$K" "$MAX_ITERS" "$TOL" "$SEED" "$out_prefix" \
+        > "${out_prefix}.log" 2>&1 || true
 
     # Parse the metrics file this run wrote and append a CSV row.
     local metrics="${out_prefix}_metrics.txt"

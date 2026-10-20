@@ -1,0 +1,21 @@
+\contentsline {section}{\numberline {1}Abstract}{2}{section.1}%
+\contentsline {section}{\numberline {2}Introduction}{3}{section.2}%
+\contentsline {section}{\numberline {3}Problem Statement}{3}{section.3}%
+\contentsline {section}{\numberline {4}Algorithms}{4}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Lloyd Iteration}{4}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Initialization}{4}{subsection.4.2}%
+\contentsline {section}{\numberline {5}System Design}{5}{section.5}%
+\contentsline {subsection}{\numberline {5.1}MPI Layer}{5}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}CUDA Kernel}{5}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Integration Contract}{5}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Shared Header}{6}{subsection.5.4}%
+\contentsline {section}{\numberline {6}Timing and Communication}{6}{section.6}%
+\contentsline {section}{\numberline {7}Datasets and Benchmark Plan}{6}{section.7}%
+\contentsline {section}{\numberline {8}Performance Evaluation}{7}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Strong Scaling}{7}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Weak Scaling}{7}{subsection.8.2}%
+\contentsline {section}{\numberline {9}Correctness and Validation}{7}{section.9}%
+\contentsline {section}{\numberline {10}Expected Outcomes}{8}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Known Limits}{8}{subsection.10.1}%
+\contentsline {section}{\numberline {11}Work Allocation}{8}{section.11}%
+\contentsline {section}{\numberline {12}Conclusion}{9}{section.12}%

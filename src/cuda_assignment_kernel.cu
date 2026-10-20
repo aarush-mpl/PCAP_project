@@ -15,7 +15,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cfloat>
-#include "kmeans_common.h"
+#include "../include/kmeans_common.h"
 
 #ifdef __CUDACC__
 #include <cuda_runtime.h>
