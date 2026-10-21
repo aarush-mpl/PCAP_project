@@ -1,22 +1,22 @@
-\contentsline {section}{\numberline {I}Abstract}{1}{section.1}%
-\contentsline {section}{\numberline {II}Introduction}{2}{section.2}%
-\contentsline {section}{\numberline {III}Problem Statement}{2}{section.3}%
-\contentsline {section}{\numberline {IV}Algorithms}{2}{section.4}%
-\contentsline {subsection}{\numberline {\mbox {IV-A}}Lloyd Iteration}{2}{subsection.4.1}%
-\contentsline {subsection}{\numberline {\mbox {IV-B}}Initialization}{3}{subsection.4.2}%
-\contentsline {section}{\numberline {V}System Design}{3}{section.5}%
-\contentsline {subsection}{\numberline {\mbox {V-A}}MPI Layer}{3}{subsection.5.1}%
-\contentsline {subsection}{\numberline {\mbox {V-B}}CUDA Kernel}{3}{subsection.5.2}%
-\contentsline {subsection}{\numberline {\mbox {V-C}}Integration Contract}{3}{subsection.5.3}%
-\contentsline {subsection}{\numberline {\mbox {V-D}}Shared Header}{3}{subsection.5.4}%
-\contentsline {section}{\numberline {VI}Timing and Communication}{4}{section.6}%
-\contentsline {section}{\numberline {VII}Datasets and Benchmark Plan}{4}{section.7}%
-\contentsline {section}{\numberline {VIII}Performance Evaluation}{4}{section.8}%
-\contentsline {subsection}{\numberline {\mbox {VIII-A}}Strong Scaling}{4}{subsection.8.1}%
-\contentsline {subsection}{\numberline {\mbox {VIII-B}}Weak Scaling}{4}{subsection.8.2}%
-\contentsline {section}{\numberline {IX}Correctness and Validation}{4}{section.9}%
-\contentsline {section}{\numberline {X}Expected Outcomes}{5}{section.10}%
-\contentsline {subsection}{\numberline {\mbox {X-A}}Known Limits}{5}{subsection.10.1}%
-\contentsline {section}{\numberline {XI}Work Allocation}{5}{section.11}%
-\contentsline {section}{\numberline {XII}Conclusion}{5}{section.12}%
-\contentsline {section}{References}{6}{section.12}%
+\contentsline {section}{\numberline {I}Abstract}{3}{section.1}%
+\contentsline {section}{\numberline {II}Introduction}{3}{section.2}%
+\contentsline {section}{\numberline {III}Problem Statement}{3}{section.3}%
+\contentsline {section}{\numberline {IV}Algorithms}{3}{section.4}%
+\contentsline {subsection}{\numberline {\mbox {IV-A}}Lloyd Iteration}{3}{subsection.4.1}%
+\contentsline {subsection}{\numberline {\mbox {IV-B}}Initialization}{4}{subsection.4.2}%
+\contentsline {section}{\numberline {V}System Design}{4}{section.5}%
+\contentsline {subsection}{\numberline {\mbox {V-A}}MPI Layer}{4}{subsection.5.1}%
+\contentsline {subsection}{\numberline {\mbox {V-B}}CUDA Kernel}{4}{subsection.5.2}%
+\contentsline {subsection}{\numberline {\mbox {V-C}}Integration Contract}{4}{subsection.5.3}%
+\contentsline {subsection}{\numberline {\mbox {V-D}}Shared Header}{4}{subsection.5.4}%
+\contentsline {section}{\numberline {VI}Timing and Communication}{5}{section.6}%
+\contentsline {section}{\numberline {VII}Datasets and Benchmark Plan}{5}{section.7}%
+\contentsline {section}{\numberline {VIII}Performance Evaluation}{5}{section.8}%
+\contentsline {subsection}{\numberline {\mbox {VIII-A}}Strong Scaling}{5}{subsection.8.1}%
+\contentsline {subsection}{\numberline {\mbox {VIII-B}}Weak Scaling}{5}{subsection.8.2}%
+\contentsline {section}{\numberline {IX}Correctness and Validation}{5}{section.9}%
+\contentsline {section}{\numberline {X}Expected Outcomes}{6}{section.10}%
+\contentsline {subsection}{\numberline {\mbox {X-A}}Known Limits}{6}{subsection.10.1}%
+\contentsline {section}{\numberline {XI}Work Allocation}{6}{section.11}%
+\contentsline {section}{\numberline {XII}Conclusion}{7}{section.12}%
+\contentsline {section}{References}{7}{section.12}%

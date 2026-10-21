@@ -14,6 +14,7 @@
 \usepackage{xcolor}
 \usepackage{fancyhdr}
 \usepackage{listings}
+\usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{titlesec}
 
@@ -61,21 +62,23 @@
 \begin{document}
 
 % ------------------------------------------------------------------
-\begin{center}
+% Full-width front matter; the remaining report stays two-column.
+\twocolumn[{%
+\begin{minipage}{\textwidth}
+{\centering
 {\large Parallel Computer Architecture \& Programming}\\[0.25em]
 {\large Problem Statement 5}\\[1.15em]
 {\LARGE\bfseries Scalable Parallel K-Means Clustering\\[0.2em]
 for Big Data Using MPI and CUDA}\\[1.05em]
 {\Large Mini-Project Synopsis}\\[0.9em]
-{\normalsize \code{colab} branch implementation}
-\end{center}
+{\normalsize \code{colab} branch implementation}\par}
 
 \vspace{0.7em}
 \noindent
 At large point counts, the bottleneck in K-means clustering is the repeated nearest-centroid scan. This project distributes that work across MPI ranks and offloads the per-rank assignment step to a CUDA kernel. Three binaries — serial, MPI-only, and hybrid MPI+CUDA — share one mathematical core and one data format, so correctness comparisons are well-defined.
 
 \vspace{0.85em}
-\begin{center}
+\centering
 \renewcommand{\arraystretch}{1.25}
 \begin{tabularx}{\textwidth}{@{}l X@{}}
 \toprule
@@ -87,24 +90,30 @@ Project title & Scalable Parallel K-Means Clustering for Big Data Using MPI and 
 Repository branch & \code{colab} \\
 \bottomrule
 \end{tabularx}
-\end{center}
 
-\vspace{1.05em}
+\vspace{0.75em}
+\raggedright
 \noindent\textbf{Team}
 
-\vspace{0.45em}
+\vspace{0.35em}
 \noindent\textbf{1. Tirth Miteshkumar Patel} \quad Reg.\ 240905272 \quad Roll 27 \quad CSE D\\
 Distributed-memory MPI design, dataset partitioning, synchronization, scaling analysis, and the shared numerical core.
 
-\vspace{0.45em}
+\vspace{0.35em}
 \noindent\textbf{2. Aarush Arora} \quad Reg.\ 240905266 \quad Roll 26 \quad CSE D\\
 CUDA assignment kernel, device-side reduction, CPU fallback when no GPU is present.
 
-\vspace{0.45em}
+\vspace{0.35em}
 \noindent\textbf{3. Udit Asthana} \quad Reg.\ 240905310 \quad Roll 31 \quad CSE D\\
 Integration of the MPI driver and the CUDA kernel into \code{kmeans\_hybrid}: the shared assignment contract, the \code{USE\_CUDA\_KERNEL} build, and the runners that validate the bound binary against the serial reference.
+\end{minipage}
+}]
 
+\clearpage
+\onecolumn
 \tableofcontents
+\clearpage
+\twocolumn
 
 % ------------------------------------------------------------------
 \section{Abstract}
@@ -193,9 +202,10 @@ Both methods run on rank 0. The resulting centroid table is broadcast before the
 \section{System Design}
 \label{sec:design}
 
-\begin{center}
+\begin{table*}[t]
+\centering
 \renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\begin{tabularx}{\textwidth}{@{}p{1.7in} p{1.25in} X@{}}
 \toprule
 \textbf{Binary} & \textbf{Build target} & \textbf{Assignment} \\
 \midrule
@@ -204,7 +214,7 @@ Both methods run on rank 0. The resulting centroid table is broadcast before the
 \code{bin/kmeans\_hybrid}  & \code{make hybrid} & \code{launch\_assignment\_kernel} on the local block \\
 \bottomrule
 \end{tabularx}
-\end{center}
+\end{table*}
 
 \subsection{MPI Layer}
 
@@ -252,7 +262,8 @@ On the hybrid path, the computation interval includes device allocation, host-to
 \section{Datasets and Benchmark Plan}
 \label{sec:data}
 
-\begin{center}
+\begin{table*}[t]
+\centering
 \renewcommand{\arraystretch}{1.18}
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.5in}
                               >{\raggedright\arraybackslash}p{2.2in}
@@ -266,7 +277,7 @@ KDD Cup 1999 (10\%) \cite{kddcup1999} & $494{,}021 \times {\sim}118$ after one-h
 US Census 1990 \cite{census1990} & $2{,}458{,}285 \times {\sim}68$ & Large-$N$ throughput workload \\
 \bottomrule
 \end{tabularx}
-\end{center}
+\end{table*}
 
 Every file that reaches a solver has been produced by either \file{scripts/generate\_dataset.py} or \file{scripts/prepare\_real\_data.py}; the solver never parses CSV. Columns are shifted to zero mean and scaled to unit variance by default, because squared Euclidean distance is sensitive to coordinate scale. The Colab notebook and default runners use a synthetic $10^5 \times 16$ matrix with 10 generating clusters, which is large enough to exercise every code path and small enough for an interactive session.
 
@@ -405,4 +416,13 @@ H.~W. Kuhn.
 \newblock The Hungarian method for the assignment problem.
 \newblock \emph{Naval Research Logistics Quarterly}, 2(1--2):83--97, 1955.
 \end{thebibliography}
+
+\clearpage
+\onecolumn
+\section*{Plagiarism Check}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=\textwidth,height=0.88\textheight,keepaspectratio]{turnitin-plag-check.png}
+  \caption{The turnitin Plagiarism check. Shows $2\%$ similarity.}
+\end{figure}
 \end{document}
