@@ -2,8 +2,8 @@
 #   make            -> synopsis.pdf
 #   make clean      -> remove LaTeX intermediates and the PDF
 
-PDF = synopsis.pdf
-TEX = synopsis.tex
+PDF = report.pdf
+TEX = report.tex
 
 .PHONY: all clean
 
@@ -14,4 +14,4 @@ $(PDF): $(TEX)
 	pdflatex -interaction=nonstopmode -halt-on-error $(TEX)
 
 clean:
-	rm -f synopsis.aux synopsis.log synopsis.out synopsis.toc synopsis.pdf
+	rm -f report.aux report.log report.out report.toc report.pdf
