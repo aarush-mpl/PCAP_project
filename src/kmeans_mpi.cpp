@@ -29,7 +29,7 @@
 // Run:
 //   mpirun -np <P> ./bin/kmeans_mpi <dataset.bin> <K> [max_iters] [tol] [seed] [out_prefix]
 // -----------------------------------------------------------------------
-#include "kmeans_common.h"
+#include "../include/kmeans_common.h"
 #include <mpi.h>
 
 // -----------------------------------------------------------------------

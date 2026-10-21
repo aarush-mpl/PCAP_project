@@ -9,7 +9,7 @@
 // Build:  make serial        (see ../Makefile)
 // Run:    ./bin/kmeans_serial <dataset.bin> <K> [max_iters] [tol] [seed] [out_prefix]
 // -----------------------------------------------------------------------
-#include "kmeans_common.h"
+#include "../include/kmeans_common.h"
 #include <chrono>
 
 using Clock = std::chrono::high_resolution_clock;
